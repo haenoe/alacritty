@@ -13,7 +13,7 @@ use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 
 use crate::config::{Action, BindingKey, BindingMode, KeyBinding};
 use crate::display::window::ImeInhibitor;
-use crate::event::TYPING_SEARCH_DELAY;
+use crate::event::{TYPING_SEARCH_DELAY, VisualMotionState};
 use crate::input::{ActionContext, Execute, Processor};
 use crate::scheduler::{TimerId, Topic};
 
@@ -50,6 +50,17 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         let inline_state = self.ctx.inline_search_state();
         if inline_state.char_pending {
             self.ctx.inline_search_input(text);
+            return;
+        }
+
+        // First key after inline search is captured.
+        let visual_select_inside_state = self.ctx.visual_motion_state();
+        if matches!(
+            visual_select_inside_state,
+            VisualMotionState::WaitingOnModifier { .. }
+                | VisualMotionState::WaitingOnCharacter { .. }
+        ) {
+            self.ctx.visual_motion_input(text);
             return;
         }
 

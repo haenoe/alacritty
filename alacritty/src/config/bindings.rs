@@ -332,6 +332,9 @@ pub enum ViAction {
     SemanticSearchForward,
     /// Search backward for selection or word under the cursor.
     SemanticSearchBackward,
+
+    VisualMotionSelect,
+    VisualMotionYank,
 }
 
 /// Search mode specific actions.
@@ -462,8 +465,8 @@ pub fn default_key_bindings() -> Vec<KeyBinding> {
         Space, ModifiersState::SHIFT | ModifiersState::CONTROL, ~BindingMode::SEARCH; Action::ToggleViMode;
         Space, ModifiersState::SHIFT | ModifiersState::CONTROL, +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
         Escape,                             +BindingMode::VI, ~BindingMode::SEARCH; Action::ClearSelection;
-        "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
-        "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
+        // "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
+        // "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
         "c",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
         "y",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollLineUp;
         "e",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollLineDown;
@@ -473,8 +476,7 @@ pub fn default_key_bindings() -> Vec<KeyBinding> {
         "f",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollPageDown;
         "u",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollHalfPageUp;
         "d",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollHalfPageDown;
-        "y",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::Copy;
-        "y",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ClearSelection;
+        "y",                                +BindingMode::VI, ~BindingMode::SEARCH; ViAction::VisualMotionYank;
         "/",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::SearchForward;
         "?",      ModifiersState::SHIFT,    +BindingMode::VI, ~BindingMode::SEARCH; Action::SearchBackward;
         "y",      ModifiersState::SHIFT,    +BindingMode::VI, ~BindingMode::SEARCH; ViAction::ToggleNormalSelection;

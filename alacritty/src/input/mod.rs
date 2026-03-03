@@ -46,6 +46,7 @@ use crate::display::window::{ImeInhibitor, Window};
 use crate::display::{Display, SizeInfo};
 use crate::event::{
     ClickState, Event, EventType, InlineSearchState, Mouse, TouchPurpose, TouchZoom,
+    VisualMotionModifier, VisualMotionState, VisualMotionType,
 };
 use crate::message_bar::{self, Message};
 use crate::scheduler::{Scheduler, TimerId, Topic};
@@ -132,6 +133,16 @@ pub trait ActionContext<T: EventListener> {
     fn inline_search_next(&mut self) {}
     fn inline_search_input(&mut self, _text: &str) {}
     fn inline_search_previous(&mut self) {}
+    fn visual_motion_state(&mut self) -> &mut VisualMotionState;
+    fn start_visual_motion(&mut self, _visual_motion_type: VisualMotionType) {}
+    fn visual_motion_input(&mut self, _text: &str) {}
+    fn visual_motion(
+        &mut self,
+        _visual_motion_type: VisualMotionType,
+        _visual_motion_modifier: VisualMotionModifier,
+        _c: char,
+    ) {
+    }
     fn hint_input(&mut self, _character: char) {}
     fn trigger_hint(&mut self, _hint: &HintMatch) {}
     fn expand_selection(&mut self) {}
@@ -152,6 +163,7 @@ impl Action {
         A: ActionContext<T>,
         T: EventListener,
     {
+        ctx.start_visual_motion(VisualMotionType::Select);
         ctx.toggle_selection(ty, ctx.terminal().vi_mode_cursor.point, Side::Left);
 
         // Make sure initial selection is not empty.
@@ -280,6 +292,17 @@ impl<T: EventListener> Execute<T> for Action {
             Action::Vi(ViAction::InlineSearchBackwardShort) => {
                 ctx.start_inline_search(Direction::Left, true)
             },
+            Action::Vi(ViAction::VisualMotionSelect) => {
+                ctx.start_visual_motion(VisualMotionType::Select)
+            },
+            Action::Vi(ViAction::VisualMotionYank) => {
+                if ctx.selection_is_empty() {
+                    ctx.start_visual_motion(VisualMotionType::Yank)
+                } else {
+                    ctx.copy_selection(ClipboardType::Clipboard);
+                    ctx.clear_selection();
+                }
+            },
             Action::Vi(ViAction::InlineSearchNext) => ctx.inline_search_next(),
             Action::Vi(ViAction::InlineSearchPrevious) => ctx.inline_search_previous(),
             Action::Vi(ViAction::SemanticSearchForward | ViAction::SemanticSearchBackward) => {
@@ -320,10 +343,8 @@ impl<T: EventListener> Execute<T> for Action {
             Action::Mouse(MouseAction::ExpandSelection) => ctx.expand_selection(),
             Action::SearchForward => ctx.start_search(Direction::Right),
             Action::SearchBackward => ctx.start_search(Direction::Left),
-            Action::Copy => ctx.copy_selection(ClipboardType::Clipboard),
             #[cfg(not(any(target_os = "macos", windows)))]
             Action::CopySelection => ctx.copy_selection(ClipboardType::Selection),
-            Action::ClearSelection => ctx.clear_selection(),
             Action::Paste => {
                 let text = ctx.clipboard_mut().load(ClipboardType::Clipboard);
                 ctx.paste(&text, true);

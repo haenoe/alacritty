@@ -655,6 +655,31 @@ impl Default for InlineSearchState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisualMotionType {
+    Select,
+    Yank,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisualMotionModifier {
+    Inside,
+    Around,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisualMotionState {
+    #[default]
+    None,
+    WaitingOnModifier {
+        r#type: VisualMotionType,
+    },
+    WaitingOnCharacter {
+        r#type: VisualMotionType,
+        modifier: VisualMotionModifier,
+    },
+}
+
 pub struct ActionContext<'a, N, T> {
     pub notifier: &'a mut N,
     pub terminal: &'a mut Term<T>,
@@ -673,6 +698,7 @@ pub struct ActionContext<'a, N, T> {
     pub scheduler: &'a mut Scheduler,
     pub search_state: &'a mut SearchState,
     pub inline_search_state: &'a mut InlineSearchState,
+    pub visual_motion_state: &'a mut VisualMotionState,
     pub dirty: &'a mut bool,
     pub occluded: &'a mut bool,
     pub preserve_title: bool,
@@ -1470,6 +1496,71 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
 
         // Immediately move to the captured character.
         self.inline_search_next();
+    }
+
+    fn visual_motion_state(&mut self) -> &mut VisualMotionState {
+        self.visual_motion_state
+    }
+
+    fn start_visual_motion(&mut self, visual_motion_type: VisualMotionType) {
+        *self.visual_motion_state =
+            VisualMotionState::WaitingOnModifier { r#type: visual_motion_type }
+    }
+
+    fn visual_motion_input(&mut self, text: &str) {
+        // Ignore input with empty text, like modifier keys.
+        let c = match text.chars().next() {
+            Some(c) => c,
+            None => return,
+        };
+
+        match *self.visual_motion_state {
+            VisualMotionState::None => {},
+            VisualMotionState::WaitingOnModifier { r#type } => {
+                let modifier = match c {
+                    'a' => VisualMotionModifier::Around,
+                    'i' => VisualMotionModifier::Inside,
+                    // TODO: Clear selection
+                    _ => return,
+                };
+
+                *self.visual_motion_state =
+                    VisualMotionState::WaitingOnCharacter { modifier, r#type };
+            },
+            VisualMotionState::WaitingOnCharacter { r#type, modifier } => {
+                self.visual_motion(r#type, modifier, c)
+            },
+        }
+    }
+
+    fn visual_motion(
+        &mut self,
+        r#type: VisualMotionType,
+        _modifier: VisualMotionModifier,
+        c: char,
+    ) {
+        if !['(', '"', '\''].contains(&c) {
+            return;
+        }
+
+        let vi_point = self.terminal.vi_mode_cursor.point;
+
+        if let (Ok(left_point), Ok(right_point)) = (
+            self.terminal.inline_search_left(vi_point, "("),
+            self.terminal.inline_search_right(vi_point, ")"),
+        ) {
+            self.start_selection(SelectionType::Simple, left_point, Side::Left);
+            self.update_selection(right_point, Side::Right);
+
+            if r#type == VisualMotionType::Yank {
+                self.copy_selection(ClipboardType::Clipboard);
+                self.clear_selection();
+                self.toggle_vi_mode();
+            }
+        }
+
+        *self.visual_motion_state = VisualMotionState::None;
+        self.mark_dirty();
     }
 
     fn message(&self) -> Option<&Message> {

@@ -37,6 +37,7 @@ use crate::display::Display;
 use crate::display::window::Window;
 use crate::event::{
     ActionContext, Event, EventProxy, InlineSearchState, Mouse, SearchState, TouchPurpose,
+    VisualMotionState,
 };
 #[cfg(unix)]
 use crate::logging::LOG_TARGET_IPC_CONFIG;
@@ -55,6 +56,7 @@ pub struct WindowContext {
     prev_bell_cmd: Option<Instant>,
     modifiers: Modifiers,
     inline_search_state: InlineSearchState,
+    visual_select_inside_state: VisualMotionState,
     search_state: SearchState,
     notifier: Notifier,
     mouse: Mouse,
@@ -245,6 +247,7 @@ impl WindowContext {
             cursor_blink_timed_out: Default::default(),
             prev_bell_cmd: Default::default(),
             inline_search_state: Default::default(),
+            visual_select_inside_state: Default::default(),
             message_buffer: Default::default(),
             window_config: Default::default(),
             search_state: Default::default(),
@@ -431,6 +434,7 @@ impl WindowContext {
             prev_bell_cmd: &mut self.prev_bell_cmd,
             message_buffer: &mut self.message_buffer,
             inline_search_state: &mut self.inline_search_state,
+            visual_motion_state: &mut self.visual_select_inside_state,
             search_state: &mut self.search_state,
             modifiers: &mut self.modifiers,
             notifier: &mut self.notifier,
