@@ -1514,35 +1514,38 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
             None => return,
         };
 
-        match *self.visual_motion_state {
-            VisualMotionState::None => return,
+        let next_visual_motion_state = match *self.visual_motion_state {
+            VisualMotionState::None => VisualMotionState::None,
             VisualMotionState::WaitingOnModifier { r#type } => {
                 let modifier = match c {
-                    'a' => VisualMotionModifier::Around,
-                    'i' => VisualMotionModifier::Inside,
-                    // TODO: Clear selection
-                    _ => return,
+                    'a' => Some(VisualMotionModifier::Around),
+                    'i' => Some(VisualMotionModifier::Inside),
+                    _ => None,
                 };
 
-                *self.visual_motion_state =
-                    VisualMotionState::WaitingOnCharacter { modifier, r#type };
+                modifier
+                    .map(|modifier| VisualMotionState::WaitingOnCharacter { modifier, r#type })
+                    .unwrap_or(VisualMotionState::None)
             },
             VisualMotionState::WaitingOnCharacter { r#type, modifier } => {
                 self.visual_motion(r#type, modifier, c);
 
-                *self.visual_motion_state = VisualMotionState::None;
-                self.mark_dirty();
+                VisualMotionState::None
             },
-        }
+        };
+
+        *self.visual_motion_state = next_visual_motion_state;
     }
 
     fn visual_motion(&mut self, r#type: VisualMotionType, modifier: VisualMotionModifier, c: char) {
-        let (start_needle, end_needle) = match c {
-            '(' => ("(", ")"),
-            '[' => ("[", "]"),
-            '"' => ("\"", "\""),
-            '\'' => ("'", "'"),
-            _ => return,
+        let Some((Ok(mut start_needle), Ok(mut end_needle))) = (match c {
+            '(' => Some((RegexSearch::new("\\("), RegexSearch::new("\\)"))),
+            '[' => Some((RegexSearch::new("\\["), RegexSearch::new("\\]"))),
+            '"' => Some((RegexSearch::new("\""), RegexSearch::new("\""))),
+            '\'' => Some((RegexSearch::new("'"), RegexSearch::new("'"))),
+            _ => None,
+        }) else {
+            return;
         };
 
         let vi_point = self.terminal.vi_mode_cursor.point;
@@ -1554,19 +1557,24 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         //         |
         // original position
         //
-        //             (              )
+        //             (      ...    (    )
         //             ^
         //             |
         //          new left
-        let Ok(mut left_point) = self
+
+        let Some(mut right_point) = self
             .terminal
-            .inline_search_left(vi_point, start_needle)
-            .or_else(|_| self.terminal.inline_search_right(vi_point, start_needle))
+            .search_next(&mut end_needle, vi_point, Direction::Right, Side::Right, None)
+            .map(|r| *r.start())
         else {
             return;
         };
 
-        let Ok(mut right_point) = self.terminal.inline_search_right(left_point, end_needle) else {
+        let Some(mut left_point) = self
+            .terminal
+            .search_next(&mut start_needle, right_point, Direction::Left, Side::Left, None)
+            .map(|r| *r.start())
+        else {
             return;
         };
 
