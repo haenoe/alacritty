@@ -464,9 +464,9 @@ pub fn default_key_bindings() -> Vec<KeyBinding> {
         // Vi mode.
         Space, ModifiersState::SHIFT | ModifiersState::CONTROL, ~BindingMode::SEARCH; Action::ToggleViMode;
         Space, ModifiersState::SHIFT | ModifiersState::CONTROL, +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
-        Escape,                             +BindingMode::VI, ~BindingMode::SEARCH; Action::ClearSelection;
-        // "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
-        // "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
+        Escape,                             +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
+        "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
+        "i",                                +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollToBottom;
         "c",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ToggleViMode;
         "y",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollLineUp;
         "e",      ModifiersState::CONTROL,  +BindingMode::VI, ~BindingMode::SEARCH; Action::ScrollLineDown;

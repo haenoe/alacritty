@@ -1515,7 +1515,7 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         };
 
         match *self.visual_motion_state {
-            VisualMotionState::None => {},
+            VisualMotionState::None => return,
             VisualMotionState::WaitingOnModifier { r#type } => {
                 let modifier = match c {
                     'a' => VisualMotionModifier::Around,
@@ -1528,39 +1528,65 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
                     VisualMotionState::WaitingOnCharacter { modifier, r#type };
             },
             VisualMotionState::WaitingOnCharacter { r#type, modifier } => {
-                self.visual_motion(r#type, modifier, c)
+                self.visual_motion(r#type, modifier, c);
+
+                *self.visual_motion_state = VisualMotionState::None;
+                self.mark_dirty();
             },
         }
     }
 
-    fn visual_motion(
-        &mut self,
-        r#type: VisualMotionType,
-        _modifier: VisualMotionModifier,
-        c: char,
-    ) {
-        if !['(', '"', '\''].contains(&c) {
-            return;
-        }
+    fn visual_motion(&mut self, r#type: VisualMotionType, modifier: VisualMotionModifier, c: char) {
+        let (start_needle, end_needle) = match c {
+            '(' => ("(", ")"),
+            '[' => ("[", "]"),
+            '"' => ("\"", "\""),
+            '\'' => ("'", "'"),
+            _ => return,
+        };
 
         let vi_point = self.terminal.vi_mode_cursor.point;
 
-        if let (Ok(left_point), Ok(right_point)) = (
-            self.terminal.inline_search_left(vi_point, "("),
-            self.terminal.inline_search_right(vi_point, ")"),
-        ) {
-            self.start_selection(SelectionType::Simple, left_point, Side::Left);
-            self.update_selection(right_point, Side::Right);
+        // If there is not the correct character left of the current position, look for it on the
+        // right. This then becomes the new left.
+        //             (              )
+        //         ^
+        //         |
+        // original position
+        //
+        //             (              )
+        //             ^
+        //             |
+        //          new left
+        let Ok(mut left_point) = self
+            .terminal
+            .inline_search_left(vi_point, start_needle)
+            .or_else(|_| self.terminal.inline_search_right(vi_point, start_needle))
+        else {
+            return;
+        };
 
-            if r#type == VisualMotionType::Yank {
-                self.copy_selection(ClipboardType::Clipboard);
-                self.clear_selection();
-                self.toggle_vi_mode();
-            }
+        let Ok(mut right_point) = self.terminal.inline_search_right(left_point, end_needle) else {
+            return;
+        };
+
+        if modifier == VisualMotionModifier::Inside {
+            let grid = self.terminal.grid();
+
+            (right_point, left_point) = (
+                grid.iter_from(right_point).prev().map_or(right_point, |cell| cell.point),
+                grid.iter_from(left_point).next().map_or(left_point, |cell| cell.point),
+            );
         }
 
-        *self.visual_motion_state = VisualMotionState::None;
-        self.mark_dirty();
+        self.start_selection(SelectionType::Simple, left_point, Side::Left);
+        self.update_selection(right_point, Side::Right);
+        self.terminal.vi_goto_point(right_point);
+
+        if r#type == VisualMotionType::Yank {
+            self.copy_selection(ClipboardType::Clipboard);
+            self.clear_selection();
+        }
     }
 
     fn message(&self) -> Option<&Message> {
